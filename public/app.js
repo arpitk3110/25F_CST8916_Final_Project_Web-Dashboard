@@ -58,6 +58,16 @@ async function updateDashboard() {
 }
 
 /**
+ * Safely format a metric value (handles null/undefined)
+ */
+function formatMetric(value) {
+    if (value === null || value === undefined || isNaN(value)) {
+        return '--';
+    }
+    return Number(value).toFixed(1);
+}
+
+/**
  * Update location cards with latest data
  */
 function updateLocationCards(locations) {
@@ -66,16 +76,25 @@ function updateLocationCards(locations) {
 
         // Update metrics
         document.getElementById(`ice-${locationKey}`).textContent =
-            location.avgIceThickness.toFixed(1);
+            formatMetric(location.avgIceThickness);
         document.getElementById(`temp-${locationKey}`).textContent =
-            location.avgSurfaceTemperature.toFixed(1);
+            formatMetric(location.avgSurfaceTemperature);
         document.getElementById(`snow-${locationKey}`).textContent =
-            location.maxSnowAccumulation.toFixed(1);
+            formatMetric(location.avgSnowAccumulation);
 
-        // Update safety status
+        // Update safety status badge (remove UNKNOWN fallback)
         const statusBadge = document.getElementById(`status-${locationKey}`);
-        statusBadge.textContent = location.safetyStatus;
-        statusBadge.className = `safety-badge ${location.safetyStatus.toLowerCase()}`;
+        const status = location.safetyStatus;
+
+        if (!status) {
+            // No status available -> keep neutral/empty badge
+            statusBadge.textContent = '';
+            statusBadge.className = 'safety-badge';
+        } else {
+            statusBadge.textContent = status;
+            const statusClass = status.toLowerCase().replace(/[^a-z]/g, '');
+            statusBadge.className = `safety-badge ${statusClass}`;
+        }
     });
 }
 
@@ -120,7 +139,7 @@ async function updateCharts() {
                     `${API_BASE_URL}/api/history/${encodeURIComponent(location)}?limit=12`
                 );
                 const data = await response.json();
-                return { location, data: data.data };
+                return { location, data: data.data || [] };
             })
         );
 
@@ -144,7 +163,8 @@ async function updateCharts() {
         }));
 
         // Get time labels from first location's data
-        const labels = historicalData[0].data.map(d =>
+        const firstLocationData = historicalData[0].data || [];
+        const labels = firstLocationData.map(d =>
             new Date(d.windowEndTime).toLocaleTimeString('en-CA', {
                 hour: '2-digit',
                 minute: '2-digit'
